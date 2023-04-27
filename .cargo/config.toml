@@ -1,0 +1,9 @@
+# https://doc.rust-lang.org/cargo/reference/config.html
+
+[target.thumbv7em-none-eabihf]
+rustflags = [
+  "-C", "link-arg=-Tlink.x",
+]
+
+[build]
+target = "thumbv7em-none-eabihf"

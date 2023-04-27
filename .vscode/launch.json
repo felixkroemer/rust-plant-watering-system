@@ -1,0 +1,37 @@
+// https://probe.rs/docs/tools/vscode/#appendix-all-supported-configuration-options
+// does not use Embed.toml, only for the extension
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "preLaunchTask": "${defaultBuildTask}",
+      "type": "probe-rs-debug",
+      "request": "launch",
+      "name": "probe_rs Executable Test",
+      "chip": "STM32H745ZITx", // probe-rs-debugger list-chips
+      "cwd": "${workspaceFolder}", // default value but somehow still required
+      // fails when defined; all values are default
+      // haltAfterReset not working
+/*       "flashingConfig": {
+        "flashingEnabled": true,
+        "resetAfterFlashing": true,
+        "haltAfterReset": false,
+      }, */
+      "coreConfigs": [
+        {
+          "programBinary": "./target/thumbv7em-none-eabihf/debug/probe-rs-test",
+          "rttEnabled": true,
+          "rttChannelFormats": [
+            // default channel config
+            {
+              "channelNumber": 0,
+              "dataFormat": "String", // Format RTT data as String data
+              "showTimestamps": true // Include host-side timestamps for every line of data transferred from the target RTT output
+            }
+          ]
+        }
+      ],
+      "consoleLogLevel": "Debug" //Info, Debug, Console
+    }
+  ]
+}

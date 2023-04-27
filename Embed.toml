@@ -1,0 +1,9 @@
+# https://github.com/probe-rs/probe-rs/blob/master/cargo-embed/src/config/default.toml
+# only used by cargo embed, not by the extension
+
+[default.general]
+chip = "STM32F303VCTx"
+
+[default.rtt]
+# 'cargo embed' does not exit immediately, prints rtt messages instead
+enabled = true
