@@ -2,10 +2,10 @@ use core::{fmt::Debug, marker::PhantomData};
 
 use embedded_hal::adc::{Channel, OneShot};
 
-pub struct YL69<ADC, PIN: Channel<ADC>, OS: OneShot<ADC, u16, PIN>> {
+pub struct YL69<ADC, PIN, OS> {
     pin: PIN,
     adc: OS,
-    pd: PhantomData<ADC>,
+    pd: PhantomData<ADC>
 }
 
 impl<ADC, PIN, OS> YL69<ADC, PIN, OS>
