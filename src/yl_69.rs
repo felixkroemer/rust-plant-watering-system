@@ -4,8 +4,8 @@ use embedded_hal::adc::{Channel, OneShot};
 
 pub struct YL69<ADC, PIN, OS> {
     pin: PIN,
-    adc: OS,
-    pd: PhantomData<ADC>
+    os: OS,
+    adc: PhantomData<ADC>
 }
 
 impl<ADC, PIN, OS> YL69<ADC, PIN, OS>
@@ -14,15 +14,15 @@ where
     OS: OneShot<ADC, u16, PIN>,
     OS::Error: Debug,
 {
-    pub fn new(pin: PIN, adc: OS) -> Self {
+    pub fn new(pin: PIN, os: OS) -> Self {
         YL69 {
             pin,
-            adc,
-            pd: PhantomData,
+            os,
+            adc: PhantomData,
         }
     }
 
     pub fn read(&mut self) -> u16 {
-        self.adc.read(&mut self.pin).unwrap()
+        self.os.read(&mut self.pin).unwrap()
     }
 }

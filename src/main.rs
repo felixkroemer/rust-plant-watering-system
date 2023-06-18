@@ -1,10 +1,7 @@
 #![no_main]
 #![no_std]
 
-use cortex_m::{
-    asm,
-    interrupt::{self, Mutex},
-};
+use cortex_m::{asm, interrupt::Mutex};
 use cortex_m_rt::entry;
 use peripherals::Peripherals;
 // use panic_halt as _;
@@ -14,8 +11,11 @@ use stm32f3xx_hal::{
     adc::{self, Adc},
     gpio::{Alternate, Analog, Gpioa, Gpiob, OpenDrain, Output, PXx, Pin, PushPull, U},
     i2c::I2c,
+    interrupt,
     pac::{self, ADC1, I2C1},
     prelude::*,
+    rcc::{Clocks, APB1},
+    timer,
 };
 
 use crate::{display::Display, pump::Pump, yl_69::YL69};
@@ -26,14 +26,13 @@ mod pump;
 mod yl_69;
 
 type PumpType = Pump<PXx<Output<PushPull>>>;
-// TODO: check if types can be erased further
 type YL69Type = YL69<ADC1, Pin<Gpioa, U<1>, Analog>, Adc<ADC1>>;
-
 type SclType = Pin<Gpiob, U<6>, Alternate<OpenDrain, 4>>;
 type SdaType = Pin<Gpiob, U<7>, Alternate<OpenDrain, 4>>;
 type DisplayType = Display<I2c<I2C1, (SclType, SdaType)>>;
 
 static PERI: Mutex<RefCell<Option<Peripherals>>> = Mutex::new(RefCell::new(Option::None));
+static TIMER: Mutex<RefCell<Option<timer::Timer<pac::TIM2>>>> = Mutex::new(RefCell::new(None));
 
 #[entry]
 fn main() -> ! {
@@ -96,21 +95,44 @@ fn main() -> ! {
 
     let display = Display::new(i2c);
 
-    interrupt::free(|cs| {
+    cortex_m::interrupt::free(|cs| {
         PERI.borrow(cs)
             .replace(Option::Some(Peripherals::new(pump, yl69, display)))
     });
 
+    configure_timer(dp.TIM2, clocks.clone(), &mut rcc.apb1);
+
     loop {
         led.toggle().unwrap();
-        interrupt::free(|cs| {
-            //TODO find better solution for getting mut ref to peripherals
+        cortex_m::interrupt::free(|cs| {
             get_mut!(PERI, cs).get_pump().toggle();
-            let reading = get_mut!(PERI, cs).get_sensor().read();
-            get_mut!(PERI, cs).get_display().display(reading);
         });
         asm::delay(5_000_000);
     }
+}
+
+fn configure_timer(tim2: pac::TIM2, clocks: Clocks, apb1: &mut APB1) {
+    let mut timer = timer::Timer::new(tim2, clocks, apb1);
+
+    unsafe {
+        cortex_m::peripheral::NVIC::unmask(timer.interrupt());
+    }
+    timer.enable_interrupt(timer::Event::Update);
+    timer.start(2.seconds());
+
+    cortex_m::interrupt::free(|cs| {
+        TIMER.borrow(cs).replace(Some(timer));
+    });
+}
+
+#[interrupt]
+fn TIM2() {
+    cortex_m::interrupt::free(|cs| {
+        get_mut!(TIMER, cs).clear_events();
+        let reading = get_mut!(PERI, cs).get_sensor().read();
+        get_mut!(PERI, cs).get_display().display(reading);
+        rprintln!("{}", reading);
+    })
 }
 
 #[macro_export]
