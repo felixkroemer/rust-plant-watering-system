@@ -9,27 +9,29 @@ use core::{cell::RefCell, panic::PanicInfo};
 use rtt_target::{rprintln, rtt_init_print};
 use stm32f3xx_hal::{
     adc::{self, Adc},
-    gpio::{Alternate, Analog, Gpioa, Gpiob, OpenDrain, Output, PXx, Pin, PushPull, U},
+    gpio::{Alternate, Analog, Gpioa, Gpiob, OpenDrain, Output, PXx, Pin, PushPull, U, Ux, Gpiox},
     i2c::I2c,
     interrupt,
-    pac::{self, ADC1, I2C1},
+    pac::{self, ADC1, I2C1, ADC2},
     prelude::*,
     rcc::{Clocks, APB1},
     timer,
 };
 
-use crate::{display::Display, pump::Pump, yl_69::YL69};
+use crate::{display::Display, pump::Pump, yl_69::YL69, water_level_sensor::WaterLevelSensor};
 
 mod display;
 mod peripherals;
 mod pump;
 mod yl_69;
+mod water_level_sensor;
 
 type PumpType = Pump<PXx<Output<PushPull>>>;
 type YL69Type = YL69<ADC1, Pin<Gpioa, U<1>, Analog>, Adc<ADC1>>;
 type SclType = Pin<Gpiob, U<6>, Alternate<OpenDrain, 4>>;
 type SdaType = Pin<Gpiob, U<7>, Alternate<OpenDrain, 4>>;
 type DisplayType = Display<I2c<I2C1, (SclType, SdaType)>>;
+type WaterLevelSensorType = WaterLevelSensor<Pin<Gpiox, Ux, stm32f3xx_hal::gpio::Input>>;
 
 static PERI: Mutex<RefCell<Option<Peripherals>>> = Mutex::new(RefCell::new(Option::None));
 static TIMER: Mutex<RefCell<Option<timer::Timer<pac::TIM2>>>> = Mutex::new(RefCell::new(None));
@@ -37,8 +39,6 @@ static TIMER: Mutex<RefCell<Option<timer::Timer<pac::TIM2>>>> = Mutex::new(RefCe
 #[entry]
 fn main() -> ! {
     rtt_init_print!();
-
-    // panic!{"test123"};
 
     let dp: pac::Peripherals = pac::Peripherals::take().unwrap();
 
@@ -64,6 +64,10 @@ fn main() -> ! {
     let analog = gpioa.pa1.into_analog(&mut gpioa.moder, &mut gpioa.pupdr);
 
     let yl69 = YL69::new(analog, adc);
+
+    let water_level_sensor_pin = gpioa.pa4.into_pull_down_input(&mut gpioa.moder, &mut gpioa.pupdr).downgrade().downgrade();
+
+    let water_level_sensor = WaterLevelSensor::new(water_level_sensor_pin);
 
     let pump_pin = gpioa
         .pa3
@@ -97,7 +101,7 @@ fn main() -> ! {
 
     cortex_m::interrupt::free(|cs| {
         PERI.borrow(cs)
-            .replace(Option::Some(Peripherals::new(pump, yl69, display)))
+            .replace(Option::Some(Peripherals::new(pump, yl69, display, water_level_sensor)))
     });
 
     configure_timer(dp.TIM2, clocks.clone(), &mut rcc.apb1);
@@ -131,6 +135,8 @@ fn TIM2() {
         get_mut!(TIMER, cs).clear_events();
         let reading = get_mut!(PERI, cs).get_sensor().read();
         get_mut!(PERI, cs).get_display().display(reading);
+        let val = get_mut!(PERI, cs).get_water_level_sensor().low();
+        rprintln!("Water level low: {}", val);
         rprintln!("{}", reading);
     })
 }
